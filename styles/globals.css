@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-white text-slate-900;
+}
+
+/* Code block styles */
+pre {
+  background: #0f172a;
+  color: #e6edf3;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow: auto;
+}
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace;
+}
+.hljs {
+  background: transparent;
+  color: inherit;
+}
+.hljs-keyword, .hljs-selector-tag, .hljs-literal {
+  color: #c084fc;
+}
+.hljs-string, .hljs-title, .hljs-name {
+  color: #34d399;
+}
