@@ -81,7 +81,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         : undefined
 
       const result = await pushToGithub(ghRepo, ghToken, repoPath, contentBase64, message, committer)
-      return res.status(200).json({ ok: true, path: `/content/posts/${slug}.mdx`, github: { content: result.content?.path, commit: result.commit?.sha } })
+      const contentPath = result.content?.path
+      const commitSha = result.commit?.sha
+      const githubUrl = commitSha && ghRepo && contentPath ? `https://github.com/${ghRepo}/blob/${commitSha}/${contentPath}` : undefined
+      return res.status(200).json({ ok: true, path: `/content/posts/${slug}.mdx`, github: { content: contentPath, commit: commitSha, url: githubUrl } })
     } catch (err: any) {
       // If GitHub push fails, still return success for local write but inform about error
       return res.status(200).json({ ok: true, path: `/content/posts/${slug}.mdx`, warning: 'GitHub push failed: ' + err.message })

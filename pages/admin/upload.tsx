@@ -8,11 +8,13 @@ export default function UploadPage() {
   const [content, setContent] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [githubUrl, setGithubUrl] = useState('')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setMessage('')
+    setGithubUrl('')
     try {
       const res = await fetch('/api/upload', {
         method: 'POST',
@@ -21,7 +23,11 @@ export default function UploadPage() {
       })
       const json = await res.json()
       if (res.ok) {
-        setMessage('上传成功：' + json.path)
+        const msg = '上传成功：' + json.path
+        setMessage(msg)
+        if (json.github && json.github.url) {
+          setGithubUrl(json.github.url)
+        }
         setTitle('')
         setSlug('')
         setDate('')
@@ -67,7 +73,14 @@ export default function UploadPage() {
           </button>
         </div>
       </form>
-      {message && <p className="mt-4 text-sm text-slate-700">{message}</p>}
+      {message && <p className="mt-4 whitespace-pre-wrap text-sm text-slate-700">{message}</p>}
+      {githubUrl && (
+        <p className="mt-3 text-sm">
+          <a href={githubUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-slate-900 hover:text-slate-700">
+            点此在 GitHub 查看已提交的文章
+          </a>
+        </p>
+      )}
       <p className="mt-6 text-xs text-slate-500">提示：此接口会把文章写入仓库的 <code>content/posts/</code> 目录。若部署在 Vercel 等平台，服务器写入不可持久化，请改用 Git 或 Headless CMS 来管理文章。</p>
     </main>
   )
