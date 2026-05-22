@@ -1,0 +1,34 @@
+---
+title: "在 MDX 中使用代码高亮与语法高亮"
+date: "2026-05-23"
+description: "演示如何在文章中包含代码块并启用语法高亮。"
+tags:
+  - mdx
+  - highlight
+  - code
+---
+
+在本项目中，我们通过 `rehype-highlight` 与 `highlight.js` 为代码块提供漂亮的语法高亮。
+
+下面是一个 JavaScript 示例：
+
+```javascript
+function sum(a, b) {
+  return a + b;
+}
+
+console.log(sum(2, 3));
+```
+
+你也可以在 MDX 中嵌入 React 组件来实现交互式示例：
+
+```jsx
+import { useState } from 'react'
+
+export default function Counter(){
+  const [n, setN] = useState(0)
+  return <button onClick={() => setN(n+1)}>Count: {n}</button>
+}
+```
+
+调试提示：如果高亮不生效，检查 `lib/mdx.ts` 中的 `rehype-highlight` 是否已正确配置，并重启开发服务器。
