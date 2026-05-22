@@ -1,0 +1,34 @@
+---
+title: "Next.js 入门与项目结构"
+date: "2026-05-23"
+description: "介绍 Next.js 项目结构、路由与 MDX 内容管理的入门指南。"
+tags:
+  - nextjs
+  - guide
+  - mdx
+---
+
+Next.js 是一个基于 React 的框架，适合构建静态网站、博客和 SSR 应用。本文简要介绍本项目中使用到的核心点：
+
+## 项目结构
+
+- `pages/`：页面路由。
+- `components/`：可复用组件。
+- `content/posts/`：以 MDX 存放的博客文章。
+
+## 使用 MDX
+
+本项目使用 `next-mdx-remote` 和 `remark-gfm` 来解析 MDX，支持代码高亮与 GitHub 风格的表格。示例代码：
+
+```jsx
+export default function Hello(){
+  return <h1>Hello Next.js</h1>
+}
+```
+
+## 发布流程
+
+1. 在 `content/posts/` 新建 `.mdx` 文件，填写 frontmatter（title/date/description/tags）。
+2. 提交到仓库并推送，项目 CI/平台将自动构建部署。
+
+希望这篇入门能帮助你快速上手本博客项目。
