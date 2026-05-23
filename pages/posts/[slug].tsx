@@ -1,7 +1,8 @@
-import { getPostBySlug, getAllPosts } from '../../lib/posts'
+import { getPostBySlug } from '../../lib/posts'
 import { MDXRemote } from 'next-mdx-remote'
 import { renderMdx } from '../../lib/mdx'
 import MDXComponents from '../../components/MDXComponents'
+import { requestHasValidAuth } from '../../lib/auth'
 
 export default function Post({ source, meta }: any) {
   return (
@@ -17,16 +18,18 @@ export default function Post({ source, meta }: any) {
   )
 }
 
-export async function getStaticPaths() {
-  const posts = await getAllPosts()
-  return {
-    paths: posts.map(p => ({ params: { slug: p.slug } })),
-    fallback: false,
+export async function getServerSideProps(context: any) {
+  if (!requestHasValidAuth(context.req)) {
+    return {
+      redirect: {
+        destination: `/login?redirect=${encodeURIComponent(context.resolvedUrl || '/blog')}`,
+        permanent: false,
+      },
+    }
   }
-}
 
-export async function getStaticProps({ params }: any) {
-  const { content, meta } = await getPostBySlug(params.slug)
+  const { slug } = context.params
+  const { content, meta } = await getPostBySlug(slug)
   const mdxSource = await renderMdx(content)
   return { props: { source: mdxSource, meta } }
 }
