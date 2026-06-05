@@ -1,7 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import {
+  ADMIN_EMAIL,
   createAdminCookieHeader,
-  validateAdminCredentials,
+  validateAdminOtpToken,
   getRateLimitStatus,
   recordRateLimitFailure,
   clearRateLimitFailures,
@@ -27,7 +28,7 @@ async function sendLoginNotification(email: string, ip: string | undefined) {
     from: 'no-reply@yourdomain.com',
     to: email,
     subject: '管理后台登录通知',
-    html: `<p>您已成功登录管理后台。</p><p>登录时间：${new Date().toLocaleString()}</p><p>登录 IP：${ip || '未知'}</p>`,
+    html: `<p>您已使用验证码成功登录管理后台。</p><p>登录时间：${new Date().toLocaleString()}</p><p>登录 IP：${ip || '未知'}</p>`,
   }
 
   try {
@@ -57,10 +58,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(429).json({ ok: false, message: `登录次数过多，请在 ${Math.ceil(rateStatus.remainingMs / 1000)} 秒后重试。` })
   }
 
-  const { email, password } = req.body || {}
-  if (!email || !password || !validateAdminCredentials(email, password)) {
+  const { email, code, token } = req.body || {}
+  if (!email || !code || !token || email.trim().toLowerCase() !== ADMIN_EMAIL) {
     recordRateLimitFailure(rateKey)
-    return res.status(401).json({ ok: false, message: '邮箱或密码错误。' })
+    return res.status(401).json({ ok: false, message: '验证码验证失败。' })
+  }
+
+  if (!validateAdminOtpToken(email, code, token)) {
+    recordRateLimitFailure(rateKey)
+    return res.status(401).json({ ok: false, message: '验证码错误或已过期。' })
   }
 
   clearRateLimitFailures(rateKey)

@@ -1,14 +1,26 @@
 import { createHmac, createHash, timingSafeEqual } from 'crypto'
 
-const BLOG_COOKIE_NAME = 'blog-auth'
-const ADMIN_COOKIE_NAME = 'admin-auth'
-const PASSWORD = process.env.BLOG_READER_PASSWORD || 'blog4me2026!'
-const COOKIE_SECRET = process.env.BLOG_AUTH_SECRET || PASSWORD
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@example.com'
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin123!'
-const ADMIN_COOKIE_SECRET = process.env.ADMIN_AUTH_SECRET || ADMIN_PASSWORD
-const MAX_AGE = 60 * 60 * 24
-const AUTH_DURATION_MS = MAX_AGE * 1000
+export const BLOG_COOKIE_NAME = 'blog-auth'
+export const ADMIN_COOKIE_NAME = 'admin-auth'
+export const PASSWORD = process.env.BLOG_READER_PASSWORD || 'blog4me2026!'
+export const COOKIE_SECRET = process.env.BLOG_AUTH_SECRET || PASSWORD
+export const ADMIN_EMAIL = process.env.ADMIN_EMAIL?.trim().toLowerCase() || 'admin@example.com'
+export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin123!'
+export const ADMIN_COOKIE_SECRET = process.env.ADMIN_AUTH_SECRET || ADMIN_PASSWORD
+export const ADMIN_OTP_SECRET = process.env.ADMIN_OTP_SECRET || ADMIN_COOKIE_SECRET
+export const MAX_AGE = 60 * 60 * 24
+export const AUTH_DURATION_MS = MAX_AGE * 1000
+export const OTP_EXPIRATION_MS = 10 * 60 * 1000
+export const LOGIN_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000
+export const MAX_LOGIN_FAILURES = 5
+export const LOGIN_BLOCK_DURATION_MS = 15 * 60 * 1000
+
+type RateLimitRecord = {
+  attempts: number[]
+  blockedUntil?: number
+}
+
+const rateLimitStore = new Map<string, RateLimitRecord>()
 
 function parseCookies(cookieHeader?: string) {
   if (!cookieHeader) {
@@ -31,6 +43,48 @@ function getTokenFromRequest(req: any, cookieName: string) {
 
 function hashSecret(value: string) {
   return createHash('sha256').update(value).digest('hex')
+}
+
+function getRateLimitRecord(key: string) {
+  let record = rateLimitStore.get(key)
+  if (!record) {
+    record = { attempts: [] }
+    rateLimitStore.set(key, record)
+  }
+  return record
+}
+
+function pruneRateLimitRecord(record: RateLimitRecord) {
+  const now = Date.now()
+  record.attempts = record.attempts.filter(timestamp => now - timestamp <= LOGIN_RATE_LIMIT_WINDOW_MS)
+  if (record.blockedUntil && now > record.blockedUntil) {
+    record.blockedUntil = undefined
+    record.attempts = []
+  }
+}
+
+export function getRateLimitStatus(key: string) {
+  const record = getRateLimitRecord(key)
+  pruneRateLimitRecord(record)
+  const now = Date.now()
+  return {
+    blocked: Boolean(record.blockedUntil && now < record.blockedUntil),
+    remainingMs: record.blockedUntil && now < record.blockedUntil ? record.blockedUntil - now : 0,
+    failures: record.attempts.length,
+  }
+}
+
+export function recordRateLimitFailure(key: string) {
+  const record = getRateLimitRecord(key)
+  pruneRateLimitRecord(record)
+  record.attempts.push(Date.now())
+  if (record.attempts.length >= MAX_LOGIN_FAILURES) {
+    record.blockedUntil = Date.now() + LOGIN_BLOCK_DURATION_MS
+  }
+}
+
+export function clearRateLimitFailures(key: string) {
+  rateLimitStore.delete(key)
 }
 
 export function validatePassword(password: string) {
@@ -92,7 +146,8 @@ export function requestHasValidAuth(req: any) {
 }
 
 export function validateAdminCredentials(email: string, password: string) {
-  const validEmail = timingSafeEqual(Buffer.from(hashSecret(email)), Buffer.from(hashSecret(ADMIN_EMAIL)))
+  const normalizedEmail = email.trim().toLowerCase()
+  const validEmail = timingSafeEqual(Buffer.from(hashSecret(normalizedEmail)), Buffer.from(hashSecret(ADMIN_EMAIL)))
   const validPassword = timingSafeEqual(Buffer.from(hashSecret(password)), Buffer.from(hashSecret(ADMIN_PASSWORD)))
   return validEmail && validPassword
 }
@@ -149,4 +204,48 @@ export function clearAdminCookieHeader() {
 export function requestHasValidAdminAuth(req: any) {
   const token = getTokenFromRequest(req, ADMIN_COOKIE_NAME)
   return validateAdminToken(token)
+}
+
+export function createAdminOtpToken(email: string, code: string) {
+  const normalizedEmail = email.trim().toLowerCase()
+  const timestamp = Date.now().toString()
+  const signature = createHmac('sha256', ADMIN_OTP_SECRET)
+    .update(`${normalizedEmail}:${code}:${timestamp}`)
+    .digest('hex')
+  return `${timestamp}:${signature}`
+}
+
+export function validateAdminOtpToken(email: string, code: string, token?: string) {
+  if (!token || typeof token !== 'string') {
+    return false
+  }
+
+  const normalizedEmail = email.trim().toLowerCase()
+  const [timestamp, signature] = token.split(':')
+  if (!timestamp || !signature) {
+    return false
+  }
+
+  const tokenTime = Number(timestamp)
+  if (!Number.isFinite(tokenTime)) {
+    return false
+  }
+
+  if (Date.now() - tokenTime > OTP_EXPIRATION_MS) {
+    return false
+  }
+
+  const expected = createHmac('sha256', ADMIN_OTP_SECRET)
+    .update(`${normalizedEmail}:${code}:${timestamp}`)
+    .digest('hex')
+
+  try {
+    return timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expected, 'hex'))
+  } catch {
+    return false
+  }
+}
+
+export function generateAdminOtpCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString()
 }
