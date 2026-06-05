@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { requestHasValidAdminAuth } from '../../lib/auth'
 
 export default function UploadPage() {
   const [title, setTitle] = useState('')
@@ -84,4 +85,17 @@ export default function UploadPage() {
       <p className="mt-6 text-xs text-slate-500">提示：此接口会把文章写入仓库的 <code>content/posts/</code> 目录。若部署在 Vercel 等平台，服务器写入不可持久化，请改用 Git 或 Headless CMS 来管理文章。</p>
     </main>
   )
+}
+
+export async function getServerSideProps({ req }: any) {
+  if (!requestHasValidAdminAuth(req)) {
+    return {
+      redirect: {
+        destination: '/admin/login',
+        permanent: false,
+      },
+    }
+  }
+
+  return { props: {} }
 }
