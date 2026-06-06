@@ -27,6 +27,16 @@ export default function AdminDashboard() {
                 </a>
               </li>
               <li>
+                <a className="font-medium text-sky-700 hover:text-sky-900" href="/admin/logs">
+                  查看登录日志
+                </a>
+              </li>
+              <li>
+                <a className="font-medium text-sky-700 hover:text-sky-900" href="/admin/change-password">
+                  修改管理员密码
+                </a>
+              </li>
+              <li>
                 <a className="font-medium text-sky-700 hover:text-sky-900" href="/blog">
                   查看文章列表
                 </a>

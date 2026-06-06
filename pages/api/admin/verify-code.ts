@@ -6,6 +6,7 @@ import {
   getRateLimitStatus,
   recordRateLimitFailure,
   clearRateLimitFailures,
+  recordAdminLoginLog,
 } from '../../../lib/auth'
 
 const RESEND_API_URL = 'https://api.resend.com/emails'
@@ -51,26 +52,58 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ ok: false, message: '只允许 POST 请求。' })
   }
 
-  const rateKey = `ip:${getClientIp(req)}`
+  const ip = getClientIp(req)
+  const rateKey = `ip:${ip}`
   const rateStatus = getRateLimitStatus(rateKey)
 
   if (rateStatus.blocked) {
+    recordAdminLoginLog({
+      timestamp: new Date().toISOString(),
+      email: req.body?.email || 'unknown',
+      ip,
+      method: 'otp',
+      success: false,
+      reason: 'blocked',
+    })
     return res.status(429).json({ ok: false, message: `登录次数过多，请在 ${Math.ceil(rateStatus.remainingMs / 1000)} 秒后重试。` })
   }
 
   const { email, code, token } = req.body || {}
   if (!email || !code || !token || email.trim().toLowerCase() !== ADMIN_EMAIL) {
     recordRateLimitFailure(rateKey)
+    recordAdminLoginLog({
+      timestamp: new Date().toISOString(),
+      email: typeof email === 'string' ? email : 'unknown',
+      ip,
+      method: 'otp',
+      success: false,
+      reason: 'invalid_request',
+    })
     return res.status(401).json({ ok: false, message: '验证码验证失败。' })
   }
 
   if (!validateAdminOtpToken(email, code, token)) {
     recordRateLimitFailure(rateKey)
+    recordAdminLoginLog({
+      timestamp: new Date().toISOString(),
+      email,
+      ip,
+      method: 'otp',
+      success: false,
+      reason: 'invalid_otp',
+    })
     return res.status(401).json({ ok: false, message: '验证码错误或已过期。' })
   }
 
   clearRateLimitFailures(rateKey)
   res.setHeader('Set-Cookie', createAdminCookieHeader())
-  sendLoginNotification(email, getClientIp(req))
+  recordAdminLoginLog({
+    timestamp: new Date().toISOString(),
+    email,
+    ip,
+    method: 'otp',
+    success: true,
+  })
+  sendLoginNotification(email, ip)
   return res.status(200).json({ ok: true })
 }

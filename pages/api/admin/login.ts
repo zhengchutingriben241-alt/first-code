@@ -5,6 +5,7 @@ import {
   getRateLimitStatus,
   recordRateLimitFailure,
   clearRateLimitFailures,
+  recordAdminLoginLog,
 } from '../../../lib/auth'
 
 const RESEND_API_URL = 'https://api.resend.com/emails'
@@ -50,21 +51,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ ok: false, message: '只允许 POST 请求。' })
   }
 
-  const rateKey = `ip:${getClientIp(req)}`
+  const ip = getClientIp(req)
+  const rateKey = `ip:${ip}`
   const rateStatus = getRateLimitStatus(rateKey)
 
   if (rateStatus.blocked) {
+    recordAdminLoginLog({
+      timestamp: new Date().toISOString(),
+      email: req.body?.email || 'unknown',
+      ip,
+      method: 'password',
+      success: false,
+      reason: 'blocked',
+    })
     return res.status(429).json({ ok: false, message: `登录次数过多，请在 ${Math.ceil(rateStatus.remainingMs / 1000)} 秒后重试。` })
   }
 
   const { email, password } = req.body || {}
   if (!email || !password || !validateAdminCredentials(email, password)) {
     recordRateLimitFailure(rateKey)
+    recordAdminLoginLog({
+      timestamp: new Date().toISOString(),
+      email: email || 'unknown',
+      ip,
+      method: 'password',
+      success: false,
+      reason: 'invalid_credentials',
+    })
     return res.status(401).json({ ok: false, message: '邮箱或密码错误。' })
   }
 
   clearRateLimitFailures(rateKey)
+  recordAdminLoginLog({
+    timestamp: new Date().toISOString(),
+    email,
+    ip,
+    method: 'password',
+    success: true,
+  })
   res.setHeader('Set-Cookie', createAdminCookieHeader())
-  sendLoginNotification(email, getClientIp(req))
+  sendLoginNotification(email, ip)
   return res.status(200).json({ ok: true })
 }

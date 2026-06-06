@@ -5,6 +5,7 @@ import {
   generateAdminOtpCode,
   getRateLimitStatus,
   recordRateLimitFailure,
+  recordAdminLoginLog,
 } from '../../../lib/auth'
 
 const RESEND_API_URL = 'https://api.resend.com/emails'
@@ -46,16 +47,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ ok: false, message: '只允许 POST 请求。' })
   }
 
-  const rateKey = `ip:${getClientIp(req)}`
+  const ip = getClientIp(req)
+  const rateKey = `ip:${ip}`
   const rateStatus = getRateLimitStatus(rateKey)
 
   if (rateStatus.blocked) {
+    recordAdminLoginLog({
+      timestamp: new Date().toISOString(),
+      email: req.body?.email || 'unknown',
+      ip,
+      method: 'send-code',
+      success: false,
+      reason: 'blocked',
+    })
     return res.status(429).json({ ok: false, message: `发送过于频繁，请 ${Math.ceil(rateStatus.remainingMs / 1000)} 秒后重试。` })
   }
 
   const { email } = req.body || {}
   if (!email || typeof email !== 'string' || email.trim().toLowerCase() !== ADMIN_EMAIL) {
     recordRateLimitFailure(rateKey)
+    recordAdminLoginLog({
+      timestamp: new Date().toISOString(),
+      email: typeof email === 'string' ? email : 'unknown',
+      ip,
+      method: 'send-code',
+      success: false,
+      reason: 'invalid_email',
+    })
     return res.status(401).json({ ok: false, message: '邮箱地址不正确。' })
   }
 
@@ -65,8 +83,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     await sendOtpCode(email, code)
   } catch (error) {
+    recordAdminLoginLog({
+      timestamp: new Date().toISOString(),
+      email,
+      ip,
+      method: 'send-code',
+      success: false,
+      reason: 'send_failed',
+    })
     return res.status(500).json({ ok: false, message: '验证码发送失败，请稍后再试。' })
   }
 
+  recordAdminLoginLog({
+    timestamp: new Date().toISOString(),
+    email,
+    ip,
+    method: 'send-code',
+    success: true,
+  })
   return res.status(200).json({ ok: true, token, expiresIn: 600 })
 }
